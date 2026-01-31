@@ -6,6 +6,9 @@ from wagtail.fields import RichTextField
 from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from wagtail.admin.panels import MultiFieldPanel, FieldPanel
 from wagtail.snippets.models import register_snippet
+from modelcluster.contrib.taggit import ClusterTaggableManager
+from taggit.models import TaggedItemBase
+
 
 class BlogIndexPage(Page):
     intro = RichTextField(blank=True)
@@ -19,12 +22,20 @@ class BlogIndexPage(Page):
         context['blogpages'] = blogpages
         return context
 
+class BlogPageTag(TaggedItemBase):
+    content_object = ParentalKey(
+        'BlogPage',
+        related_name='tagged_items',
+        on_delete=models.CASCADE
+    )
 
 class BlogPage(Page):
     date = models.DateField("Post date")
     intro = models.CharField(max_length=250)
     body = RichTextField(blank=True)
     authors = ParentalManyToManyField('blog.Author', blank=True)
+    tags = ClusterTaggableManager(through=BlogPageTag, blank=True)
+
     # Add the main_image method:
     def main_image(self):
         gallery_item = self.gallery_images.first()
@@ -36,11 +47,13 @@ class BlogPage(Page):
     content_panels = Page.content_panels + [
         MultiFieldPanel([
             "date",
-            # Change this:
             FieldPanel("authors", widget=forms.CheckboxSelectMultiple),
+
+            # Add this:
+            "tags",
         ], heading="Blog information"),
-        "intro", "body", "gallery_images"
-    ]
+            "intro", "body", "gallery_images"
+        ]
 
 
 class BlogPageGalleryImage(Orderable):
@@ -67,3 +80,16 @@ class Author(models.Model):
 
     class Meta:
         verbose_name_plural = 'Authors'
+
+class BlogTagIndexPage(Page):
+
+    def get_context(self, request):
+
+        # Filter by tag
+        tag = request.GET.get('tag')
+        blogpages = BlogPage.objects.filter(tags__name=tag)
+
+        # Update template context
+        context = super().get_context(request)
+        context['blogpages'] = blogpages
+        return context
